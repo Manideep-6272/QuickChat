@@ -1,8 +1,62 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import quickchat from "../assets/logo_big.svg";
+import { useAuth } from "../context/AuthContext";
 
 const RegisterPage = () => {
+  const navigate = useNavigate();
+  const { signup } = useAuth();
+  const [formData, setFormData] = useState({
+    mobile: "",
+    name: "",
+    bio: "",
+    password: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setError(""); // Clear error when user starts typing
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      // Validation
+      if (!formData.mobile || !formData.name || !formData.bio || !formData.password) {
+        setError("Please fill in all fields");
+        setLoading(false);
+        return;
+      }
+
+      if (formData.password.length < 6) {
+        setError("Password must be at least 6 characters");
+        setLoading(false);
+        return;
+      }
+
+      // Call signup
+      await signup(formData.name, formData.mobile, formData.bio, formData.password);
+      
+      // Redirect to login page after successful registration
+      navigate("/login", { 
+        state: { message: "Registration successful! Please log in." } 
+      });
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container">
       <div className="row vh-100 align-items-center justify-content-center">
@@ -28,10 +82,21 @@ const RegisterPage = () => {
               background: "rgba(255,255,255,0.03)",
             }}
           >
-            <form>
+            <form onSubmit={handleSubmit}>
               <h3 className="text-center mb-4 fw-bold">
                 Register
               </h3>
+
+              {error && (
+                <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                  {error}
+                  <button 
+                    type="button" 
+                    className="btn-close" 
+                    onClick={() => setError("")}
+                  ></button>
+                </div>
+              )}
 
               {/* Mobile */}
               <div className="mb-3">
@@ -44,6 +109,8 @@ const RegisterPage = () => {
                   id="mobile"
                   name="mobile"
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.mobile}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -59,6 +126,8 @@ const RegisterPage = () => {
                   id="name"
                   name="name"
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.name}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -74,6 +143,8 @@ const RegisterPage = () => {
                   id="bio"
                   name="bio"
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.bio}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -88,15 +159,21 @@ const RegisterPage = () => {
                   type="password"
                   id="password"
                   name="password"
-                  maxLength={10}
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.password}
+                  onChange={handleChange}
+                  maxLength={10}
                   required
                 />
               </div>
 
               {/* Button */}
-              <button className="btn btn-primary btn-sm w-50 mx-auto d-block">
-                Register
+              <button 
+                type="submit"
+                className="btn btn-primary btn-sm w-50 mx-auto d-block"
+                disabled={loading}
+              >
+                {loading ? "Registering..." : "Register"}
               </button>
 
               {/* Login Link */}

@@ -1,6 +1,93 @@
-import React from "react";
+import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 function ProfilePage() {
+  const navigate = useNavigate();
+  const { user, updateProfile, updateUserInfo } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [previewImage, setPreviewImage] = useState(user?.profilepic || null);
+  const [formData, setFormData] = useState({
+    name: user?.name || "",
+    bio: user?.bio || "",
+  });
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Create a preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreviewImage(event.target.result);
+      setHasChanges(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setHasChanges(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      // Update profile picture if changed
+      if (previewImage && previewImage !== user?.profilepic) {
+        await updateProfile({ profilepic: previewImage });
+      }
+
+      // Update user info (name and bio) if changed
+      const updates = {};
+      if (formData.name.trim() !== (user?.name || "")) {
+        updates.name = formData.name.trim();
+      }
+      if (formData.bio.trim() !== (user?.bio || "")) {
+        updates.bio = formData.bio.trim();
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await updateUserInfo(updates);
+      }
+
+      setSuccess("Profile updated successfully!");
+      setHasChanges(false);
+
+      // Redirect back after 2 seconds
+      setTimeout(() => {
+        navigate("/");
+      }, 2000);
+    } catch (err) {
+      setError(err.message || "Failed to update profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="container">
+        <div className="row vh-100 align-items-center justify-content-center">
+          <div className="col-md-5 text-center">
+            <p style={{ color: "#9ca3af" }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <div className="row vh-100 align-items-center justify-content-center">
@@ -20,6 +107,28 @@ function ProfilePage() {
               Profile
             </h2>
 
+            {error && (
+              <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                {error}
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setError("")}
+                ></button>
+              </div>
+            )}
+
+            {success && (
+              <div className="alert alert-success alert-dismissible fade show" role="alert">
+                {success}
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setSuccess("")}
+                ></button>
+              </div>
+            )}
+
             {/* Profile Photo */}
             <div className="d-flex flex-column align-items-center mb-4">
 
@@ -30,17 +139,23 @@ function ProfilePage() {
                   borderRadius: "50%",
                   overflow: "hidden",
                   border: "3px solid #8b5cf6",
+                  backgroundImage: previewImage ? `url(${previewImage})` : "linear-gradient(135deg,#7c3aed,#2563eb)",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundColor: "#111827",
                 }}
               >
-                <img
-                  src="https://i.pravatar.cc/300"
-                  alt="profile"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
+                {!previewImage && (
+                  <img
+                    src="https://i.pravatar.cc/300"
+                    alt="profile"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                )}
               </div>
 
               {/* Upload Button */}
@@ -56,12 +171,13 @@ function ProfilePage() {
                   type="file"
                   hidden
                   accept="image/*"
+                  onChange={handleImageChange}
                 />
               </label>
             </div>
 
             {/* Form */}
-            <form>
+            <form onSubmit={handleSubmit}>
 
               {/* Full Name */}
               <div className="mb-3">
@@ -72,8 +188,10 @@ function ProfilePage() {
                 <input
                   type="text"
                   id="name"
+                  name="name"
                   className="form-control form-control-sm transparent-input mt-2"
-                  defaultValue="Manideep"
+                  value={formData.name}
+                  onChange={handleFormChange}
                 />
               </div>
 
@@ -87,9 +205,11 @@ function ProfilePage() {
                   type="text"
                   id="mobile"
                   className="form-control form-control-sm transparent-input mt-2"
-                  defaultValue="9948654190"
+                  value={user.mobile}
                   readOnly
+                  disabled
                 />
+                <small style={{ color: "#9ca3af" }}>Cannot be changed</small>
               </div>
 
               {/* Bio */}
@@ -98,31 +218,36 @@ function ProfilePage() {
                   Bio
                 </label>
 
-                <input
-                  type="text"
+                <textarea
                   id="bio"
+                  name="bio"
                   className="form-control form-control-sm transparent-input mt-2"
-                  defaultValue="Busy"
+                  value={formData.bio}
+                  onChange={handleFormChange}
+                  rows="3"
+                  maxLength="200"
                 />
-              </div>
-
-              {/* Password */}
-              <div className="mb-4">
-                <label htmlFor="password" className="form-label">
-                  Change Password
-                </label>
-
-                <input
-                  type="password"
-                  id="password"
-                  className="form-control form-control-sm transparent-input mt-2"
-                  placeholder="Enter new password"
-                />
+                <small style={{ color: "#9ca3af" }}>
+                  {formData.bio.length}/200
+                </small>
               </div>
 
               {/* Update Button */}
-              <button className="btn btn-primary btn-sm w-50 mx-auto d-block">
-                Update Profile
+              <button 
+                type="submit" 
+                className="btn btn-primary btn-sm w-50 mx-auto d-block"
+                disabled={loading || !hasChanges}
+              >
+                {loading ? "Updating..." : "Update Profile"}
+              </button>
+
+              {/* Back Button */}
+              <button 
+                type="button" 
+                className="btn btn-outline-secondary btn-sm w-50 mx-auto d-block mt-2"
+                onClick={() => navigate("/")}
+              >
+                Back
               </button>
             </form>
           </div>

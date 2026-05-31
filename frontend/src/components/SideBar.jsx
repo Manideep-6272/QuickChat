@@ -1,29 +1,76 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import logo from "../assets/favicon.svg";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
+import { messageAPI } from "../lib/api";
+
 function SideBar({ selectedChat, onSelectChat }) {
   const navigate = useNavigate();
-  const chats = [
-    {
-      id: 1,
-      name: "Rahul",
-      message: "Hey bro",
-      online: true,
-    },
-    {
-      id: 2,
-      name: "Kiran",
-      message: "Call me",
-      online: false,
-    },
-  ];
+  const { logout, user } = useAuth();
+  const { onlineUsers, isUserOnline } = useSocket();
+  const [chats, setChats] = useState([]);
+  const [filteredChats, setFilteredChats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch users list on component mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const users = await messageAPI.getUsers();
+        setChats(users);
+        setFilteredChats(users);
+      } catch (err) {
+        setError("Failed to load users");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  // Filter chats based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredChats(chats);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = chats.filter(
+      (chat) =>
+        chat.name.toLowerCase().includes(query) ||
+        (chat.bio && chat.bio.toLowerCase().includes(query))
+    );
+    setFilteredChats(filtered);
+  }, [searchQuery, chats]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
+      // Still navigate to login even if logout fails
+      navigate("/login");
+    }
+  };
 
   return (
     <div
-      className="h-100 p-3 text-light fs-6"
+      className="p-3 text-light fs-6 d-flex flex-column"
       style={{
         background: "#0b1120",
         borderRight: "1px solid rgba(255,255,255,0.1)",
+        height: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
       }}
     >
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -77,22 +124,13 @@ function SideBar({ selectedChat, onSelectChat }) {
               </button>
             </li>
             <li>
-              <button
-                className="dropdown-item text-light"
-                style={{ background: "transparent" }}
-                onClick={() => navigate("/newchat")}
-              >
-                New Chat
-              </button>
-            </li>
-            <li>
               <hr className="dropdown-divider text-secondary" />
             </li>
             <li>
               <button
                 className="dropdown-item text-danger"
                 style={{ background: "transparent" }}
-                onClick={() => navigate("/logout")}
+                onClick={handleLogout}
               >
                 Logout
               </button>
@@ -100,10 +138,20 @@ function SideBar({ selectedChat, onSelectChat }) {
           </ul>
         </div>
       </div>
+
+      {/* Welcome Message */}
+      {user && (
+        <div className="mb-3 p-2" style={{ background: "#111827", borderRadius: "8px" }}>
+          <small style={{ color: "#9ca3af" }}>Welcome, <strong>{user.name}</strong></small>
+        </div>
+      )}
+
       <input
         type="text"
         placeholder="Search chats"
         className="form-control mb-4 search-input"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
         style={{
           background: "#111827",
           border: "none",
@@ -112,59 +160,100 @@ function SideBar({ selectedChat, onSelectChat }) {
           borderRadius: "12px",
         }}
       />
-      {chats.map((chat) => (
-        <div
-          key={chat.id}
-          onClick={() => onSelectChat(chat)}
-          className="d-flex align-items-center p-3 mb-3"
-          style={{
-            background: selectedChat?.id === chat.id ? "#1f2937" : "#111827",
-            borderRadius: "16px",
-            cursor: "pointer",
-            // transition: "0.3s",
-            border:
-              selectedChat?.id === chat.id
-                ? "1px solid #8b5cf6"
-                : "1px solid rgba(255,255,255,0.05)",
-          }}
-        >
-          <div className="position-relative">
-            <div
-              style={{
-                width: "55px",
-                height: "55px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg,#7c3aed,#2563eb)",
-              }}
-            ></div>
-            {chat.online && (
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  borderRadius: "50%",
-                  background: "#22c55e",
-                  position: "absolute",
-                  bottom: "3px",
-                  right: "3px",
-                  border: "2px solid #111827",
-                }}
-              ></div>
-            )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger alert-sm mb-3" style={{ fontSize: "12px" }}>
+          {error}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="text-center">
+          <small style={{ color: "#9ca3af" }}>Loading chats...</small>
+        </div>
+      )}
+
+      {/* Users List */}
+      <div className="" style={{
+        flex: '1 1 auto',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        minHeight: '0',
+        paddingRight: '4px',
+      }}>
+        {!loading && filteredChats.length === 0 && (
+          <div className="text-center" style={{ color: "#9ca3af" }}>
+            <small>{searchQuery ? "No users found" : "No users available"}</small>
           </div>
-          <div className="ms-3">
-            <h6 className="mb-1 fw-semibold">{chat.name}</h6>
-            <small
+        )}
+
+        {filteredChats.map((chat) => {
+          const isOnline = isUserOnline(chat._id);
+          return (
+            <div
+              key={chat._id}
+              onClick={() => onSelectChat(chat)}
+              className="d-flex align-items-center p-3 mb-3"
               style={{
-                color: "#9ca3af",
+                background: selectedChat?._id === chat._id ? "#1f2937" : "#111827",
+                borderRadius: "16px",
+                cursor: "pointer",
+                border:
+                  selectedChat?._id === chat._id
+                    ? "1px solid #8b5cf6"
+                    : "1px solid rgba(255,255,255,0.05)",
+                flexShrink: 0
               }}
             >
-              {chat.message}
-            </small>
-          </div>
-        </div>
-      ))}
+              <div className="position-relative">
+                <div
+                  style={{
+                    width: "55px",
+                    height: "55px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg,#7c3aed,#2563eb)",
+                    backgroundImage: chat.profilepic ? `url(${chat.profilepic})` : "linear-gradient(135deg,#7c3aed,#2563eb)",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    border: isOnline ? "2px solid #10b981" : "2px solid #6b7280",
+                  }}
+                ></div>
+                {/* Online Status Indicator */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "0",
+                    right: "0",
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    background: isOnline ? "#10b981" : "#6b7280",
+                    border: "2px solid #0b1120",
+                  }}
+                ></div>
+              </div>
+              <div className="ms-3 flex-grow-1 min-width-0">
+                <h6 className="mb-1 fw-semibold">{chat.name}</h6>
+                <small
+                  style={{
+                    color: isOnline ? "#10b981" : "#9ca3af",
+                    display: "block",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {isOnline ? "Online" : "Offline"}
+                </small>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
 export default SideBar;

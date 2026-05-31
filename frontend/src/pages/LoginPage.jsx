@@ -1,8 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
 import quickchat from "../assets/logo_big.svg";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function LoginPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [formData, setFormData] = useState({
+    mobile: "",
+    password: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setError(""); // Clear error when user starts typing
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (!formData.mobile || !formData.password) {
+        setError("Please fill in all fields");
+        setLoading(false);
+        return;
+      }
+
+      await login(formData.mobile, formData.password);
+      navigate("/"); // Redirect to home page after successful login
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container">
       <div className="row vh-100 align-items-center justify-content-center">
@@ -28,10 +68,21 @@ function LoginPage() {
               background: "rgba(255,255,255,0.03)",
             }}
           >
-            <form>
+            <form onSubmit={handleSubmit}>
               <h2 className="text-center mb-4 fw-bold">
                 Login
               </h2>
+
+              {error && (
+                <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                  {error}
+                  <button 
+                    type="button" 
+                    className="btn-close" 
+                    onClick={() => setError("")}
+                  ></button>
+                </div>
+              )}
 
               {/* Mobile Number */}
               <div className="mb-3">
@@ -44,6 +95,8 @@ function LoginPage() {
                   id="mobile"
                   name="mobile"
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.mobile}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -59,6 +112,8 @@ function LoginPage() {
                   id="password"
                   name="password"
                   className="form-control form-control-sm transparent-input mt-2"
+                  value={formData.password}
+                  onChange={handleChange}
                   required
                 />
               </div>
@@ -77,8 +132,12 @@ function LoginPage() {
               </div>
 
               {/* Login Button */}
-              <button className="btn btn-primary btn-sm w-50 mx-auto d-block">
-                Login
+              <button 
+                type="submit"
+                className="btn btn-primary btn-sm w-50 mx-auto d-block"
+                disabled={loading}
+              >
+                {loading ? "Logging in..." : "Login"}
               </button>
 
               {/* Register Link */}
